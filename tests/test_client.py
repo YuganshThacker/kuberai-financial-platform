@@ -16,3 +16,4 @@ def test_get_client_returns_singleton():
             c2 = get_client()
             assert c1 is c2
             assert mock_create.call_count == 1
+
