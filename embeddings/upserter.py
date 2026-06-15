@@ -1,6 +1,32 @@
 from typing import List, Optional
 from supabase import Client
 
+
+def upsert_web_search_chunks(
+    client: Client,
+    symbol: str,
+    url: str,
+    title: str,
+    source_domain: str,
+    published_at: Optional[str],
+    chunks: List[str],
+    vectors: List[List[float]],
+) -> None:
+    rows = [
+        {
+            "symbol": symbol,
+            "url": url,
+            "title": title,
+            "source_domain": source_domain,
+            "published_at": published_at,
+            "chunk_index": i,
+            "chunk_text": chunk,
+            "embedding": vector,
+        }
+        for i, (chunk, vector) in enumerate(zip(chunks, vectors))
+    ]
+    client.table("web_search_results").upsert(rows, on_conflict="url,chunk_index").execute()
+
 def upsert_document_chunks(
     client: Client,
     symbol: str,

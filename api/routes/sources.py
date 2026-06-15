@@ -18,6 +18,9 @@ def get_symbol_sources(symbol: str):
     transcript_count = (
         client.table("transcripts").select("id", count="exact").eq("symbol", sym).execute().count
     )
+    web_count = (
+        client.table("web_search_results").select("id", count="exact").eq("symbol", sym).execute().count
+    )
     return {
         "symbol": sym,
         "has_market_data": metrics is not None,
@@ -25,4 +28,5 @@ def get_symbol_sources(symbol: str):
         "document_chunks": doc_count,
         "news_chunks": news_count,
         "transcript_chunks": transcript_count,
+        "web_search_chunks": web_count,
     }

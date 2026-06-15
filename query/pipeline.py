@@ -1,9 +1,9 @@
 import os
-import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 from openai import OpenAI
 from supabase import Client
+from config.nifty50 import NIFTY50_SYMBOLS
 from query.retriever import retrieve_similar_chunks
 from query.sql_lookup import get_latest_metrics, format_metrics_as_context
 from query.fallback_search import serper_search
@@ -11,11 +11,7 @@ from query.fallback_search import serper_search
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
 CONFIDENCE_THRESHOLD = 0.5
 
-KNOWN_SYMBOLS = {
-    "TCS", "INFY", "WIPRO", "HCLTECH", "TECHM", "RELIANCE", "HDFCBANK",
-    "ICICIBANK", "AXISBANK", "BAJFINANCE", "SBIN", "TATASTEEL",
-    "MARUTI", "NESTLEIND", "POWERGRID", "NTPC", "ONGC", "COALINDIA",
-}
+KNOWN_SYMBOLS: set[str] = set(NIFTY50_SYMBOLS)
 
 @dataclass
 class Source:
@@ -30,9 +26,11 @@ class QueryResult:
     used_fallback: bool = False
 
 def _extract_symbol(query: str) -> Optional[str]:
-    for word in re.findall(r'\b[A-Z]{2,10}\b', query):
-        if word in KNOWN_SYMBOLS:
-            return word
+    # Substring match handles symbols with special chars (BAJAJ-AUTO, M&M)
+    upper = query.upper()
+    for sym in KNOWN_SYMBOLS:
+        if sym in upper:
+            return sym
     return None
 
 def run_query(client: Client, query: str, symbol: Optional[str] = None) -> QueryResult:
