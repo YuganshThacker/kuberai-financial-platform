@@ -2,6 +2,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config.nifty50 import NIFTY50_COMPANIES, NIFTY50_SYMBOLS
+from config.nse_all_stocks import NSE_ALL_COMPANIES
 from db.client import get_client
 from embeddings.embedder import embed_texts
 from embeddings.upserter import upsert_web_search_chunks
@@ -42,10 +43,14 @@ def lambda_handler(event: dict, context) -> dict:
     symbols = event.get("symbols", NIFTY50_SYMBOLS)
     client = get_client()
 
-    # Step 1: RSS parse (fast, ~50 feedparser calls, no Jina yet)
+    # company name lookup: full NSE list first, then Nifty 50, then symbol itself
+    def _company_name(sym: str) -> str:
+        return NSE_ALL_COMPANIES.get(sym) or NIFTY50_COMPANIES.get(sym) or sym
+
+    # Step 1: RSS parse (fast, no Jina yet)
     all_entries: list[tuple[str, dict]] = []
     for symbol in symbols:
-        company = NIFTY50_COMPANIES.get(symbol, symbol)
+        company = _company_name(symbol)
         for entry in fetch_rss_entries(symbol, company):
             all_entries.append((symbol, entry))
 
