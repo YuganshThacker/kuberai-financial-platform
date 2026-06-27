@@ -65,14 +65,20 @@ def find_transcript_pdf(
 # ── HTML fetch ────────────────────────────────────────────────────────────────
 
 def _fetch_static(url: str) -> str:
+    # SSRF guard: IR-page URLs come from scraped/extracted content — validate host first.
+    from ingestion.official_filings.url_guard import safe_get
     try:
-        r = httpx.get(url, headers=_HEADERS, follow_redirects=True, timeout=20)
+        r = safe_get(url, headers=_HEADERS, timeout=20)
         return r.text
     except Exception:
         return ""
 
 
 def _fetch_playwright(url: str) -> str:
+    # SSRF guard: reject non-public targets before the headless browser navigates.
+    from ingestion.official_filings.url_guard import is_public_url
+    if not is_public_url(url):
+        return ""
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as pw:

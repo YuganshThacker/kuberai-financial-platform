@@ -385,7 +385,10 @@ def _download_company_pdf(url: str) -> bytes:
     Handles Liferay-style paths (/file.pdf/UUID) where the Content-Type may differ
     but the content is still a valid PDF.
     """
-    r = httpx.get(url, headers=_COMPANY_PDF_HEADERS, follow_redirects=True, timeout=45)
+    from ingestion.official_filings.url_guard import safe_get
+    # SSRF guard: url is extracted from filing text / scraped HTML, so validate
+    # the host (and every redirect hop) before fetching — blocks metadata/private targets.
+    r = safe_get(url, headers=_COMPANY_PDF_HEADERS, timeout=45)
     r.raise_for_status()
     if r.content[:4] != b"%PDF":
         raise ValueError(f"Non-PDF response ({len(r.content)} bytes) from {url}")
