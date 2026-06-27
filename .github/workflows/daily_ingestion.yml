@@ -1,0 +1,51 @@
+name: Daily Transcript Ingestion
+
+on:
+  schedule:
+    # 01:00 UTC daily — NSE filings typically published during Indian business hours
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: "Single symbol to ingest (leave blank for all Nifty50)"
+        required: false
+      dry_run:
+        description: "Dry run (classify only, no writes)"
+        type: boolean
+        default: false
+
+jobs:
+  ingest:
+    name: Ingest NSE transcripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: python -m playwright install chromium --with-deps
+
+      - name: Run ingestion scheduler
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # Workflow dispatch inputs assigned to env vars to prevent command injection
+          INPUT_SYMBOL: ${{ github.event.inputs.symbol }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          if [ -n "$INPUT_SYMBOL" ]; then
+            python -m ingestion.scheduler --symbol "$INPUT_SYMBOL" ${INPUT_DRY_RUN:+--dry-run}
+          else
+            python -m ingestion.scheduler ${INPUT_DRY_RUN:+--dry-run}
+          fi

@@ -7,9 +7,13 @@ from db.client import get_client
 from embeddings.embedder import embed_texts
 from embeddings.upserter import upsert_web_search_chunks
 from ingestion.nse_bse.pdf_processor import chunk_text
-from ingestion.web_search.stock_scraper import fetch_and_build_article, fetch_rss_entries
+from ingestion.web_search.stock_scraper import (
+    fetch_and_build_article,
+    fetch_rss_entries,
+    get_direct_page_entries,
+)
 
-# 15 parallel Jina fetches keeps Lambda well within 900 s for 50 stocks × 12 articles
+# 15 parallel workers: Jina fetches + Screener httpx + direct financial pages
 MAX_WORKERS = 15
 WEB_CHUNK_SIZE = 300
 WEB_CHUNK_OVERLAP = 30
@@ -47,16 +51,20 @@ def lambda_handler(event: dict, context) -> dict:
     def _company_name(sym: str) -> str:
         return NSE_ALL_COMPANIES.get(sym) or NIFTY50_COMPANIES.get(sym) or sym
 
-    # Step 1: RSS parse (fast, no Jina yet)
+    # Step 1: Collect all work — RSS articles + direct financial pages
+    # General RSS feeds are cached module-level after first fetch, so 50 stocks
+    # don't re-fetch the same 11 feeds repeatedly.
     all_entries: list[tuple[str, dict]] = []
     for symbol in symbols:
         company = _company_name(symbol)
         for entry in fetch_rss_entries(symbol, company):
             all_entries.append((symbol, entry))
+        for entry in get_direct_page_entries(symbol, company):
+            all_entries.append((symbol, entry))
 
-    print(f"[web_search] RSS collected {len(all_entries)} articles for {len(symbols)} stocks")
+    print(f"[web_search] collected {len(all_entries)} sources for {len(symbols)} stocks")
 
-    # Step 2: Parallel Jina fetch + embed + upsert
+    # Step 2: Parallel fetch (Jina/httpx) + embed + upsert
     success = 0
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = {

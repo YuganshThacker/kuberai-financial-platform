@@ -46,14 +46,14 @@ def _client():
     return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
 
-def run_symbol(symbol: str, modes: list[str], client, metrics: IngestionMetrics) -> dict:
+def run_symbol(symbol: str, modes: list[str], client, metrics: IngestionMetrics, max_years: int = 3) -> dict:
     result = {m: 0 for m in ALL_MODES}
     result["symbol"] = symbol
     t0 = time.perf_counter()
 
     if "annual" in modes:
         try:
-            reports = discover_annual_reports(symbol, client, max_years=3)
+            reports = discover_annual_reports(symbol, client, max_years=max_years)
             for report in reports:
                 n = ingest_annual_report(symbol, report, client, metrics)
                 result["annual"] += n
@@ -127,6 +127,8 @@ def main() -> None:
     parser.add_argument("--symbol", help="Run for a single symbol only")
     parser.add_argument("--skip-annual", action="store_true",
                         help="Skip annual reports (slow, use to run other types quickly)")
+    parser.add_argument("--max-years", type=int, default=3,
+                        help="How many fiscal years back to search for annual reports (default: 3)")
     args = parser.parse_args()
 
     modes = [m.strip() for m in args.mode.split(",") if m.strip() in ALL_MODES]
@@ -137,7 +139,7 @@ def main() -> None:
         print("No valid modes specified.")
         sys.exit(1)
 
-    symbols = [args.symbol.upper()] if args.symbol else NIFTY50_SYMBOLS
+    symbols = [s.strip().upper() for s in args.symbol.split(",")] if args.symbol else NIFTY50_SYMBOLS
 
     print(f"\nNifty50 ingestion — {len(symbols)} symbols, modes: {', '.join(modes)}")
     print("=" * 75)
@@ -148,7 +150,7 @@ def main() -> None:
 
     for i, symbol in enumerate(symbols, 1):
         print(f"\n[{i:02d}/{len(symbols)}] {symbol} ({NIFTY50_COMPANIES.get(symbol, '')})")
-        r = run_symbol(symbol, modes, client, metrics)
+        r = run_symbol(symbol, modes, client, metrics, max_years=args.max_years)
         results.append(r)
         chunks_this = sum(r.get(m, 0) for m in modes)
         print(f"  → {chunks_this} new chunks in {r['elapsed']}s")

@@ -19,7 +19,7 @@ Filtering logic:
   - Max 50 most-recent announcements per symbol (~2–3 years coverage)
 
 Storage:
-  - Table: official_filings  (filing_type = 'announcement')
+  - Table: corporate_documents  (document_type = 'announcement')
   - Dedup key: (pdf_url, chunk_index) — pdf_url = stable pseudo-URL
     nse://annc/{symbol}/{YYYY-MM-DD}/{8-char-hash}
 
@@ -82,7 +82,7 @@ def _is_worth_indexing(ann: dict) -> bool:
 
 def _already_stored(client: Client, pseudo_url: str) -> bool:
     resp = (
-        client.table("official_filings")
+        client.table("corporate_documents")
         .select("id")
         .eq("pdf_url", pseudo_url)
         .limit(1)
@@ -138,7 +138,7 @@ def ingest_announcements(
         rows = [
             {
                 "symbol": symbol,
-                "filing_type": "announcement",
+                "document_type": "announcement",
                 "quarter": quarter or None,
                 "fiscal_year": fiscal_year or None,
                 "filing_date": filing_date or None,
@@ -151,7 +151,7 @@ def ingest_announcements(
             for i, (chunk, vector) in enumerate(zip(chunks, vectors))
         ]
         try:
-            client.table("official_filings").upsert(
+            client.table("corporate_documents").upsert(
                 rows, on_conflict="pdf_url,chunk_index"
             ).execute()
         except Exception as exc:

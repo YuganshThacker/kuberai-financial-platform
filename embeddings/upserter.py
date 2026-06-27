@@ -27,6 +27,7 @@ def upsert_web_search_chunks(
     ]
     client.table("web_search_results").upsert(rows, on_conflict="url,chunk_index").execute()
 
+
 def upsert_document_chunks(
     client: Client,
     symbol: str,
@@ -54,7 +55,8 @@ def upsert_document_chunks(
         }
         for i, (chunk, vector) in enumerate(zip(chunks, vectors))
     ]
-    client.table("documents").upsert(rows).execute()
+    # on_conflict uses unique(source_url, chunk_index) — see migration 011
+    client.table("documents").upsert(rows, on_conflict="source_url,chunk_index").execute()
 
 
 def upsert_news_chunks(
@@ -80,7 +82,8 @@ def upsert_news_chunks(
         }
         for i, (chunk, vector) in enumerate(zip(chunks, vectors))
     ]
-    client.table("news_articles").upsert(rows).execute()
+    # on_conflict uses unique(url, chunk_index) — see migration 011
+    client.table("news_articles").upsert(rows, on_conflict="url,chunk_index").execute()
 
 
 def upsert_transcript_chunks(
@@ -112,4 +115,5 @@ def upsert_transcript_chunks(
         }
         for i, (chunk, vector) in enumerate(zip(chunks, vectors))
     ]
-    client.table("transcripts").upsert(rows).execute()
+    # on_conflict uses unique(symbol, title, chunk_index) — see migration 011
+    client.table("transcripts").upsert(rows, on_conflict="symbol,title,chunk_index").execute()

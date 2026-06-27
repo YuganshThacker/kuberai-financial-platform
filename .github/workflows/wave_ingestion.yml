@@ -1,0 +1,65 @@
+name: Universe Wave Ingestion
+
+# Cloud-hosted ingestion of the 4 research doc types across an NSE universe wave.
+# Runs on GitHub-hosted runners (survives local machine being offline).
+# Resumable: re-dispatching continues from discovery_state (skips done, retries errors).
+
+on:
+  workflow_dispatch:
+    inputs:
+      universe:
+        description: "Universe tag to ingest"
+        type: choice
+        options: [nifty50, nifty500, nse_all]
+        default: nifty500
+      doc_types:
+        description: "Comma-separated: transcripts,annual,presentations,announcements,quarterly"
+        default: "transcripts,annual,presentations,announcements"
+      max_years:
+        description: "Annual-report lookback (years)"
+        default: "5"
+      batch_size:
+        description: "Symbols per parallel batch"
+        default: "60"
+
+jobs:
+  ingest:
+    name: "wave ${{ github.event.inputs.universe }} batch ${{ matrix.batch }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 350          # under GitHub's 6h job ceiling
+    strategy:
+      fail-fast: false            # one batch failing never stops the others
+      max-parallel: 4
+      matrix:
+        batch: [0, 1, 2, 3]       # 4 parallel batches; offset = batch * batch_size
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Ingest batch
+        env:
+          SUPABASE_URL: ${{ secrets.UAT_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.UAT_SUPABASE_SERVICE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          UNIVERSE: ${{ github.event.inputs.universe }}
+          DOC_TYPES: ${{ github.event.inputs.doc_types }}
+          MAX_YEARS: ${{ github.event.inputs.max_years }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size }}
+          BATCH_INDEX: ${{ matrix.batch }}
+        run: |
+          OFFSET=$(( BATCH_INDEX * BATCH_SIZE ))
+          echo "Universe=$UNIVERSE  batch=$BATCH_INDEX  offset=$OFFSET  limit=$BATCH_SIZE"
+          python scripts/ingest_universe.py \
+            --universe "$UNIVERSE" \
+            --doc-types "$DOC_TYPES" \
+            --max-years "$MAX_YEARS" \
+            --offset "$OFFSET" \
+            --limit "$BATCH_SIZE"
