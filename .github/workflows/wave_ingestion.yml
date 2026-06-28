@@ -20,7 +20,7 @@ on:
         default: "5"
       batch_size:
         description: "Symbols per parallel batch"
-        default: "60"
+        default: "40"
 
 jobs:
   ingest:
@@ -29,9 +29,12 @@ jobs:
     timeout-minutes: 350          # under GitHub's 6h job ceiling
     strategy:
       fail-fast: false            # one batch failing never stops the others
-      max-parallel: 4
+      max-parallel: 6
       matrix:
-        batch: [0, 1, 2, 3]       # 4 parallel batches; offset = batch * batch_size
+        # 6 parallel batches; offset = batch * batch_size. With batch_size=40
+        # this covers 240 symbols (≥ Nifty500's 215). For larger universes,
+        # raise batch_size (e.g. nse_all 2107 → batch_size 360).
+        batch: [0, 1, 2, 3, 4, 5]
 
     steps:
       - uses: actions/checkout@v4
