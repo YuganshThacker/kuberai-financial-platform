@@ -17,10 +17,10 @@ on:
         default: "transcripts,annual,presentations,announcements"
       max_years:
         description: "Annual-report lookback (years)"
-        default: "5"
+        default: "3"
       batch_size:
         description: "Symbols per parallel batch"
-        default: "40"
+        default: "20"
 
 jobs:
   ingest:
@@ -29,12 +29,13 @@ jobs:
     timeout-minutes: 350          # under GitHub's 6h job ceiling
     strategy:
       fail-fast: false            # one batch failing never stops the others
-      max-parallel: 6
+      max-parallel: 20             # public repo → unlimited minutes, 20 concurrent
       matrix:
-        # 6 parallel batches; offset = batch * batch_size. With batch_size=40
-        # this covers 240 symbols (≥ Nifty500's 215). For larger universes,
-        # raise batch_size (e.g. nse_all 2107 → batch_size 360).
-        batch: [0, 1, 2, 3, 4, 5]
+        # 12 parallel batches; offset = batch * batch_size. With batch_size=20
+        # this covers 240 symbols (≥ Nifty500's 215). Smaller batches = short
+        # jobs that finish before GitHub preempts long-running runners.
+        # For nse_all (2107): raise batch_size to ~180 (12 × 180 = 2160).
+        batch: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
     steps:
       - uses: actions/checkout@v4
