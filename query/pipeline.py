@@ -1,11 +1,12 @@
 import os
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 from openai import OpenAI
 from supabase import Client
 from config.nse_all_stocks import NSE_ALL_COMPANIES
 from query.retriever import retrieve_similar_chunks
-from query.sql_lookup import get_latest_metrics, format_metrics_as_context
+from query.sql_lookup import get_latest_metrics, format_metrics_as_context, build_financial_context
 from query.fallback_search import serper_search
 from ingestion.official_filings.insight_extractor import get_insights_context
 
@@ -39,11 +40,19 @@ class QueryResult:
 
 
 def _extract_symbol(query: str) -> Optional[str]:
+    """Detect an NSE symbol as a whole word in the query.
+
+    Naive substring matching over 2,107 symbols is unsafe (short tickers match
+    inside ordinary words, and set iteration order is nondeterministic). Match on
+    word boundaries and prefer the longest hit so e.g. 'RELIANCE' beats a stray
+    short ticker, and 'TCS' in 'is TCS doing' resolves correctly.
+    """
     upper = query.upper()
-    for sym in KNOWN_SYMBOLS:
-        if sym in upper:
-            return sym
-    return None
+    matches = [
+        sym for sym in KNOWN_SYMBOLS
+        if re.search(rf"(?<![A-Z0-9]){re.escape(sym)}(?![A-Z0-9])", upper)
+    ]
+    return max(matches, key=len) if matches else None
 
 
 def run_query(client: Client, query: str, symbol: Optional[str] = None) -> QueryResult:
@@ -74,6 +83,23 @@ def run_query(client: Client, query: str, symbol: Optional[str] = None) -> Query
         except Exception as exc:
             print(f"[pipeline] Insights lookup failed for {detected_symbol}: {exc}")
 
+        # Structured financials: exact valuation, multi-year fundamentals trend,
+        # price, shareholding, dividends — pulled from the populated financial
+        # tables (td_ratios, fundamentals_history, price_history, td_shareholding,
+        # corporate_actions). High-priority quantitative context the LLM can cite.
+        try:
+            fin_ctx = build_financial_context(client, detected_symbol)
+            if fin_ctx:
+                context_parts.append(fin_ctx)
+                sources.append(Source(
+                    title=f"{detected_symbol} Financials & Valuation",
+                    url=None,
+                    source_type="structured_financials",
+                ))
+        except Exception as exc:
+            print(f"[pipeline] Financial context failed for {detected_symbol}: {exc}")
+
+        # Legacy market_metrics path (kept for compatibility; table may be empty)
         try:
             metrics = get_latest_metrics(client, detected_symbol)
             if metrics:
