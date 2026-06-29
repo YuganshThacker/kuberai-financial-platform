@@ -31,11 +31,11 @@ jobs:
       fail-fast: false            # one batch failing never stops the others
       max-parallel: 20             # public repo → unlimited minutes, 20 concurrent
       matrix:
-        # 12 parallel batches; offset = batch * batch_size. With batch_size=20
-        # this covers 240 symbols (≥ Nifty500's 215). Smaller batches = short
-        # jobs that finish before GitHub preempts long-running runners.
-        # For nse_all (2107): raise batch_size to ~180 (12 × 180 = 2160).
-        batch: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        # 20 parallel batches; offset = batch * batch_size. With batch_size=110
+        # this covers 2,200 symbols (≥ all-NSE 2,112). Small batches keep each
+        # annual job short — even the heavy-PDF roadblock symbols can't push a
+        # job past the 350-min cap. For smaller universes just lower batch_size.
+        batch: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 
     steps:
       - uses: actions/checkout@v4
