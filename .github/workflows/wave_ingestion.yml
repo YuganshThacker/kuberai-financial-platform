@@ -21,6 +21,9 @@ on:
       batch_size:
         description: "Symbols per parallel batch"
         default: "20"
+      no_resume:
+        description: "Re-process even already-complete pairs (e.g. table backfill)"
+        default: "false"
 
 jobs:
   ingest:
@@ -58,12 +61,15 @@ jobs:
           MAX_YEARS: ${{ github.event.inputs.max_years }}
           BATCH_SIZE: ${{ github.event.inputs.batch_size }}
           BATCH_INDEX: ${{ matrix.batch }}
+          NO_RESUME: ${{ github.event.inputs.no_resume }}
         run: |
           OFFSET=$(( BATCH_INDEX * BATCH_SIZE ))
-          echo "Universe=$UNIVERSE  batch=$BATCH_INDEX  offset=$OFFSET  limit=$BATCH_SIZE"
+          EXTRA=""
+          [ "$NO_RESUME" = "true" ] && EXTRA="--no-resume"
+          echo "Universe=$UNIVERSE  batch=$BATCH_INDEX  offset=$OFFSET  limit=$BATCH_SIZE  no_resume=$NO_RESUME"
           python scripts/ingest_universe.py \
             --universe "$UNIVERSE" \
             --doc-types "$DOC_TYPES" \
             --max-years "$MAX_YEARS" \
             --offset "$OFFSET" \
-            --limit "$BATCH_SIZE"
+            --limit "$BATCH_SIZE" $EXTRA
